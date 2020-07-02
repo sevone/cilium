@@ -62,6 +62,14 @@ func (k *K8sWatcher) ciliumEndpointsInit(ciliumNPClient *k8s.K8sCiliumClient, as
 					if oldCE := k8s.ObjToCiliumEndpoint(oldObj); oldCE != nil {
 						if newCE := k8s.ObjToCiliumEndpoint(newObj); newCE != nil {
 							valid = true
+
+							// Local processing of CiliumEndpoints does not include the use of Labels.
+							// So if there is an update in the labels of CiliumEndpoint we just ignore it here.
+							// We update CEPs labels only when there is an update in the Pod Labels which
+							// is managed by K8S Pod watcher.
+							oldCE.Labels = nil
+							newCE.Labels = nil
+
 							if oldCE.DeepEqual(newCE) {
 								equal = true
 								return
