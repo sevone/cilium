@@ -11,9 +11,6 @@ redirect_debug_logs ${LOGS_DIR}
 
 set -ex
 
-log "${TEST_NAME} has been deprecated and replaced by test/runtime/lb.go:Services Policies"
-exit 0
-
 function cleanup {
   monitor_stop
   cilium service delete --all 2> /dev/null || true
@@ -22,7 +19,7 @@ function cleanup {
 }
 
 function finish_test {
-  gather_files ${TEST_NAME} ${TEST_SUITE}
+#  gather_files ${TEST_NAME} ${TEST_SUITE}
   cleanup
 }
 
@@ -79,7 +76,7 @@ function proxy_init {
   wait_for_docker_ipv6_addr client
 
   log "waiting for all 4 endpoints to get an identity"
-  while [ `cilium endpoint list -o jsonpath='{range [*]}{.status.identity.id}{"\n"}{end}' | grep '^[0-9]' | grep -v '^5$' | wc -l` -ne 4 ] ; do
+  while [ `cilium endpoint list -o jsonpath='{range [*]}{.status.identity.id}{"\n"}{end}' | grep '^[0-9]' | grep -v '^5$' | wc -l` -ne 5 ] ; do
     log "waiting..."
     sleep 1
   done
