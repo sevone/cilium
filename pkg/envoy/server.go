@@ -287,19 +287,10 @@ func (s *XDSServer) getHttpFilterChainProto(clusterName string, tls bool) *envoy
 	return chain
 }
 
-func (s *XDSServer) getTcpFilterChainProto(clusterName string) *envoy_config_listener.FilterChain {
-	return &envoy_config_listener.FilterChain{
+func (s *XDSServer) getTcpFilterChainProto(clusterName string, useProxylib bool) *envoy_config_listener.FilterChain {
+	chain := &envoy_config_listener.FilterChain{
 		Filters: []*envoy_config_listener.Filter{{
 			Name: "cilium.network",
-			ConfigType: &envoy_config_listener.Filter_TypedConfig{
-				TypedConfig: toAny(&cilium.NetworkFilter{
-					Proxylib: "libcilium.so",
-					ProxylibParams: map[string]string{
-						"access-log-path": s.accessLogPath,
-						"xds-path":        s.socketPath,
-					},
-				}),
-			},
 		}, {
 			Name: "envoy.tcp_proxy",
 			ConfigType: &envoy_config_listener.Filter_TypedConfig{
@@ -312,6 +303,20 @@ func (s *XDSServer) getTcpFilterChainProto(clusterName string) *envoy_config_lis
 			},
 		}},
 	}
+
+	if useProxylib {
+		chain.Filters[0].ConfigType = &envoy_config_listener.Filter_TypedConfig{
+			TypedConfig: toAny(&cilium.NetworkFilter{
+				Proxylib: "libcilium.so",
+				ProxylibParams: map[string]string{
+					"access-log-path": s.accessLogPath,
+					"xds-path":        s.socketPath,
+				},
+			}),
+		}
+	}
+
+	return chain
 }
 
 // AddListener adds a listener to a running Envoy proxy.
@@ -381,13 +386,16 @@ func (s *XDSServer) AddListener(name string, kind policy.L7ParserType, port uint
 					BpfRoot:                     bpf.GetMapRoot(),
 				}),
 			},
-		}, {
-			Name: "envoy.listener.tls_inspector",
 		}},
 	}
 
 	// Add filter chains
 	if kind == policy.ParserTypeHTTP {
+		// Use tls_inspector only with HTTP, insert as the first filter
+		listenerConf.ListenerFilters = append([]*envoy_config_listener.ListenerFilter{{
+			Name: "envoy.listener.tls_inspector",
+		}}, listenerConf.ListenerFilters...)
+
 		listenerConf.FilterChains = append(listenerConf.FilterChains, s.getHttpFilterChainProto(clusterName, false))
 
 		// Add a TLS variant
@@ -397,9 +405,9 @@ func (s *XDSServer) AddListener(name string, kind policy.L7ParserType, port uint
 		}
 		listenerConf.FilterChains = append(listenerConf.FilterChains, s.getHttpFilterChainProto(tlsClusterName, true))
 	} else {
-		listenerConf.FilterChains = append(listenerConf.FilterChains, s.getTcpFilterChainProto(clusterName))
+		listenerConf.FilterChains = append(listenerConf.FilterChains, s.getTcpFilterChainProto(clusterName, true))
 
-		mySqlChain := s.getTcpFilterChainProto(clusterName)
+		mySqlChain := s.getTcpFilterChainProto(clusterName, false)
 		mySqlChain.Filters = append([]*envoy_config_listener.Filter{{
 			Name: "envoy.filters.network.mysql_proxy",
 			ConfigType: &envoy_config_listener.Filter_TypedConfig{
@@ -408,11 +416,13 @@ func (s *XDSServer) AddListener(name string, kind policy.L7ParserType, port uint
 				}),
 			}}}, mySqlChain.Filters...)
 		mySqlChain.FilterChainMatch = &envoy_config_listener.FilterChainMatch{
+			// must have transport match, otherwise TLS inspector will be automatically inserted
+			TransportProtocol:    "raw_buffer",
 			ApplicationProtocols: []string{"envoy.mysql"},
 		}
 		listenerConf.FilterChains = append(listenerConf.FilterChains, mySqlChain)
 
-		mongoChain := s.getTcpFilterChainProto(clusterName)
+		mongoChain := s.getTcpFilterChainProto(clusterName, false)
 		mongoChain.Filters = append([]*envoy_config_listener.Filter{{
 			Name: "envoy.mongo_proxy",
 			ConfigType: &envoy_config_listener.Filter_TypedConfig{
@@ -422,6 +432,8 @@ func (s *XDSServer) AddListener(name string, kind policy.L7ParserType, port uint
 				}),
 			}}}, mongoChain.Filters...)
 		mongoChain.FilterChainMatch = &envoy_config_listener.FilterChainMatch{
+			// must have transport match, otherwise TLS inspector will be automatically inserted
+			TransportProtocol:    "raw_buffer",
 			ApplicationProtocols: []string{"envoy.mongo"},
 		}
 		listenerConf.FilterChains = append(listenerConf.FilterChains, mongoChain)

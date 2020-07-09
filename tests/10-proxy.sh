@@ -100,12 +100,18 @@ function policy_single_egress {
     "endpointSelector": {"matchLabels":{"id.client":""}},
     "egress": [{
 	"toPorts": [{
-	    "ports": [{"port": "80", "protocol": "tcp"}],
+	    "ports": [{"port": "80", "protocol": "TCP"}],
 	    "rules": {
-                "HTTP": [{
+		"l7proto": "test.passer",
+		"l7": [{}]
+	    }
+	},{
+	    "ports": [{"port": "8080", "protocol": "tcp"}],
+	    "rules": {
+		"HTTP": [{
 		    "method": "GET",
 		    "path": "/public"
-                }]
+		}]
 	    }
 	}]
     }]
@@ -305,7 +311,8 @@ for state in "false" "true"; do
         service_init;;
     esac
 
-    for policy in "egress" "ingress" "egress_and_ingress" "many_egress" "many_ingress"; do
+    # for policy in "egress" "ingress" "egress_and_ingress" "many_egress" "many_ingress"; do
+    for policy in "egress"; do
 
       log "+----------------------------------------------------------------------+"
       log "Testing with Policy=$policy, Service=$service, Conntrack=$state"
