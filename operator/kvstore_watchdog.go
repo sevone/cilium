@@ -88,4 +88,14 @@ func startKvstoreWatchdog() {
 			<-time.After(defaults.LockLeaseTTL)
 		}
 	}()
+
+	go func() {
+		for {
+			err := kvstore.Client().Update(context.Background(), kvstore.HeartbeatPath, []byte(time.Now().Format(time.RFC3339)), true)
+			if err != nil {
+				log.WithError(err).Warning("Unable to update heartbeat key")
+			}
+			<-time.After(kvstore.HeartbeatWriteInterval)
+		}
+	}()
 }
