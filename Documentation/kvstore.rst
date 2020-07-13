@@ -103,6 +103,20 @@ Key                                                              Value
 
 .. _k8s.CNPNSWithMeta: https://pkg.go.dev/github.com/cilium/cilium/pkg/k8s#CNPNSWithMeta
 
+Heartbeat
+---------
+
+The heartbeat key is periodically updated by the operator to contain the
+current time and date. It is used by agents to validate that kvstore updates
+can be received.
+
+====================== ======================
+Key                    Value
+====================== ======================
+``cilium/.heartbeat``  Current time and date
+====================== ======================
+
+
 Leases
 ======
 
